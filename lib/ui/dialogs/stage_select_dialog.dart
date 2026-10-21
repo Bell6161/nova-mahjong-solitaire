@@ -18,12 +18,11 @@ class StageSelectDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stages = MahjongLayout.allStages();
-    final int maxUnlocked = StorageService.getMaxUnlockedStage();
 
     return Dialog(
       backgroundColor: Colors.transparent,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 540),
+        constraints: const BoxConstraints(maxWidth: 440, maxHeight: 620),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: theme.cardBackgroundColor.withOpacity(0.96),
@@ -40,7 +39,7 @@ class StageSelectDialog extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Title
+            // Title Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -49,12 +48,12 @@ class StageSelectDialog extends StatelessWidget {
                     Icon(Icons.grid_view_rounded, color: theme.tileHighlightColor, size: 24),
                     const SizedBox(width: 8),
                     Text(
-                      'STAGE SELECTION',
+                      'STAGE SELECTION (10 LAYOUTS)',
                       style: TextStyle(
                         color: theme.primaryTextColor,
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 0.8,
+                        letterSpacing: 0.6,
                       ),
                     ),
                   ],
@@ -66,30 +65,29 @@ class StageSelectDialog extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
+
+            // Scrollable List of Stages
             Expanded(
               child: ListView.separated(
                 itemCount: stages.length,
                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final stage = stages[index];
-                  final bool isUnlocked = stage.id <= maxUnlocked;
                   final bool isCurrent = stage.id == currentStageId;
                   final int stars = StorageService.getStageStars(stage.id);
 
                   return InkWell(
-                    onTap: isUnlocked
-                        ? () {
-                            Navigator.pop(context);
-                            onSelectStage(stage);
-                          }
-                        : null,
+                    onTap: () {
+                      Navigator.pop(context);
+                      onSelectStage(stage);
+                    },
                     borderRadius: BorderRadius.circular(16),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
                         color: isCurrent
-                            ? theme.tileHighlightColor.withOpacity(0.2)
-                            : theme.boardBackgroundColor.withOpacity(0.6),
+                            ? theme.tileHighlightColor.withOpacity(0.25)
+                            : theme.boardBackgroundColor.withOpacity(0.65),
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isCurrent
@@ -105,22 +103,20 @@ class StageSelectDialog extends StatelessWidget {
                             width: 38,
                             height: 38,
                             decoration: BoxDecoration(
-                              color: isUnlocked
-                                  ? theme.tileHighlightColor.withOpacity(0.25)
-                                  : Colors.grey.withOpacity(0.2),
+                              color: isCurrent
+                                  ? theme.tileHighlightColor
+                                  : theme.tileHighlightColor.withOpacity(0.2),
                               shape: BoxShape.circle,
                             ),
                             child: Center(
-                              child: isUnlocked
-                                  ? Text(
-                                      '${stage.id}',
-                                      style: TextStyle(
-                                        color: theme.primaryTextColor,
-                                        fontWeight: FontWeight.w900,
-                                        fontSize: 16,
-                                      ),
-                                    )
-                                  : const Icon(Icons.lock_rounded, size: 18, color: Colors.grey),
+                              child: Text(
+                                '${stage.id}',
+                                style: TextStyle(
+                                  color: isCurrent ? Colors.black : theme.primaryTextColor,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ),
                           ),
                           const SizedBox(width: 14),
@@ -130,21 +126,44 @@ class StageSelectDialog extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  stage.name,
-                                  style: TextStyle(
-                                    color: isUnlocked
-                                        ? theme.primaryTextColor
-                                        : theme.primaryTextColor.withOpacity(0.4),
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        stage.name,
+                                        style: TextStyle(
+                                          color: theme.primaryTextColor,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (isCurrent) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: theme.tileHighlightColor,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: const Text(
+                                          'PLAYING',
+                                          style: TextStyle(
+                                            color: Colors.black,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
-                                const SizedBox(height: 2),
+                                const SizedBox(height: 3),
                                 Text(
-                                  '${stage.difficulty} • ${stage.tileCount} Tiles',
+                                  '${stage.difficulty} • ${stage.tileCount} Tiles • ${stage.layers} Layers',
                                   style: TextStyle(
-                                    color: theme.secondaryTextColor.withOpacity(0.85),
+                                    color: theme.secondaryTextColor.withOpacity(0.9),
                                     fontSize: 12,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -153,17 +172,16 @@ class StageSelectDialog extends StatelessWidget {
                             ),
                           ),
 
-                          // Stars earned
-                          if (isUnlocked)
-                            Row(
-                              children: List.generate(3, (starIdx) {
-                                return Icon(
-                                  starIdx < stars ? Icons.star_rounded : Icons.star_outline_rounded,
-                                  size: 20,
-                                  color: starIdx < stars ? const Color(0xFFFFD700) : Colors.grey,
-                                );
-                              }),
-                            ),
+                          // Star completion
+                          Row(
+                            children: List.generate(3, (starIdx) {
+                              return Icon(
+                                starIdx < stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                                size: 18,
+                                color: starIdx < stars ? const Color(0xFFFFD700) : Colors.grey.withOpacity(0.5),
+                              );
+                            }),
+                          ),
                         ],
                       ),
                     ),

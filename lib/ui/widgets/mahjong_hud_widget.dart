@@ -8,6 +8,7 @@ class MahjongHudWidget extends StatelessWidget {
   final String stageName;
   final int score;
   final int remainingPairs;
+  final int availableMoves;
   final int elapsedSeconds;
   final int hintCount;
   final int shuffleCount;
@@ -26,6 +27,7 @@ class MahjongHudWidget extends StatelessWidget {
     required this.stageName,
     required this.score,
     required this.remainingPairs,
+    required this.availableMoves,
     required this.elapsedSeconds,
     required this.hintCount,
     required this.shuffleCount,
@@ -125,7 +127,7 @@ class MahjongHudWidget extends StatelessWidget {
 
                 const SizedBox(height: 8),
 
-                // Stat Badges (Score & Remaining Pairs)
+                // Stat Badges (Score & Remaining Pairs & Available Moves)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -134,11 +136,17 @@ class MahjongHudWidget extends StatelessWidget {
                       value: '$score',
                       color: theme.secondaryTextColor,
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     _buildStatPill(
-                      label: 'PAIRS LEFT',
+                      label: 'PAIRS',
                       value: '$remainingPairs',
                       color: const Color(0xFF64B5F6),
+                    ),
+                    const SizedBox(width: 8),
+                    _buildStatPill(
+                      label: 'MOVES',
+                      value: '$availableMoves',
+                      color: availableMoves > 0 ? const Color(0xFF81C784) : const Color(0xFFE57373),
                     ),
                   ],
                 ),

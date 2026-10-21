@@ -16,7 +16,7 @@ void main() {
     // Pump single frame for initial render with repeating animations
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Zen Lotus'), findsOneWidget);
+    expect(find.text('The Classic Turtle'), findsOneWidget);
     expect(find.text('Hint'), findsOneWidget);
     expect(find.text('Shuffle'), findsOneWidget);
     expect(find.text('Undo'), findsOneWidget);

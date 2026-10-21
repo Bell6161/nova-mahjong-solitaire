@@ -177,6 +177,20 @@ class MahjongEngine {
     return null;
   }
 
+  /// Total count of currently available free matching pairs
+  int get availableMovesCount {
+    final free = getFreeTiles();
+    final Map<String, int> counts = {};
+    for (final t in free) {
+      counts[t.matchGroup] = (counts[t.matchGroup] ?? 0) + 1;
+    }
+    int moves = 0;
+    for (final c in counts.values) {
+      moves += c ~/ 2;
+    }
+    return moves;
+  }
+
   /// Undo the last match
   bool undoLastMove() {
     if (undoStack.isEmpty) return false;

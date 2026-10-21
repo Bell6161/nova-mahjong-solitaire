@@ -40,7 +40,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-    _currentLayout = MahjongLayout.lotus();
+    _currentLayout = MahjongLayout.turtle();
     _engine = MahjongEngine(layout: _currentLayout);
 
     // Load saved theme
@@ -50,9 +50,14 @@ class _GameScreenState extends State<GameScreen> {
       orElse: () => GameTheme.traditional,
     );
 
-    // Preload sprites
-    SpriteManager.preloadTheme(_currentTheme.tileFolder);
+    _loadAssetsAndStart();
+  }
 
+  void _loadAssetsAndStart() async {
+    await SpriteManager.preloadTheme(_currentTheme.tileFolder);
+    if (mounted) {
+      setState(() {});
+    }
     _startTimer();
   }
 
@@ -296,10 +301,13 @@ class _GameScreenState extends State<GameScreen> {
       context: context,
       builder: (_) => ThemeSelectDialog(
         currentTheme: _currentTheme,
-        onThemeSelected: (theme) {
-          setState(() {
-            _currentTheme = theme;
-          });
+        onThemeSelected: (theme) async {
+          await SpriteManager.preloadTheme(theme.tileFolder);
+          if (mounted) {
+            setState(() {
+              _currentTheme = theme;
+            });
+          }
         },
       ),
     );
@@ -372,6 +380,7 @@ class _GameScreenState extends State<GameScreen> {
                 stageName: _currentLayout.name,
                 score: _engine.score,
                 remainingPairs: _engine.remainingPairs,
+                availableMoves: _engine.availableMovesCount,
                 elapsedSeconds: _elapsedSeconds,
                 hintCount: StorageService.hintCount,
                 shuffleCount: StorageService.shuffleCount,
