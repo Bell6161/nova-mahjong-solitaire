@@ -358,12 +358,12 @@ class _GameScreenState extends State<GameScreen> {
               ),
             ),
 
-            // Mahjong Interactive 3D Board
+            // Mahjong Interactive 3D Board (Screen-filling giant tiles)
             Positioned.fill(
-              top: 130,
-              bottom: 95,
+              top: 110,
+              bottom: 80,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
                 child: MahjongBoardWidget(
                   engine: _engine,
                   theme: _currentTheme,

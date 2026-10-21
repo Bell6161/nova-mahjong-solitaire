@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../../models/mahjong_tile.dart';
@@ -30,9 +29,6 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
   double _tileH = 80.4;
   double _minX = 0, _minY = 0;
   double _gridW = 8, _gridH = 8;
-  double _boardPixelW = 600, _boardPixelH = 600;
-  double _initialScale = 1.0;
-  bool _initializedScale = false;
 
   @override
   void initState() {
@@ -45,7 +41,7 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.engine.layout.id != widget.engine.layout.id) {
       _calculateBounds();
-      _initializedScale = false;
+      _transController.value = Matrix4.identity();
     }
   }
 
@@ -59,59 +55,20 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
     }
     _minX = minX;
     _minY = minY;
-
-    _gridW = (maxX - minX + 1.8);
-    _gridH = (maxY - minY + 2.0);
-
-    // Large, authentic rectangular Mahjong stone dimensions (ratio 1:1.34)
-    if (_gridW <= 7) {
-      _tileW = 64.0;
-    } else if (_gridW <= 10) {
-      _tileW = 58.0;
-    } else {
-      _tileW = 52.0;
-    }
-    _tileH = _tileW * 1.34;
-
-    _boardPixelW = _gridW * _tileW + 80;
-    _boardPixelH = _gridH * _tileH + 80;
+    _gridW = (maxX - minX + 1.0);
+    _gridH = (maxY - minY + 1.0);
   }
 
-  void _initScaleToFit(BoxConstraints constraints) {
-    if (_initializedScale || constraints.maxWidth <= 0 || constraints.maxHeight <= 0) return;
-    _initializedScale = true;
-
-    final scaleX = (constraints.maxWidth - 16) / _boardPixelW;
-    final scaleY = (constraints.maxHeight - 16) / _boardPixelH;
-    _initialScale = min(scaleX, scaleY).clamp(0.40, 1.25);
-
-    final tx = (constraints.maxWidth - (_boardPixelW * _initialScale)) / 2;
-    final ty = (constraints.maxHeight - (_boardPixelH * _initialScale)) / 2;
-
-    _transController.value = Matrix4.identity()
-      ..translate(tx, ty)
-      ..scale(_initialScale);
-  }
-
-  void _resetZoom(Size viewportSize) {
-    final scaleX = (viewportSize.width - 16) / _boardPixelW;
-    final scaleY = (viewportSize.height - 16) / _boardPixelH;
-    final targetScale = min(scaleX, scaleY).clamp(0.40, 1.25);
-
-    final tx = (viewportSize.width - (_boardPixelW * targetScale)) / 2;
-    final ty = (viewportSize.height - (_boardPixelH * targetScale)) / 2;
-
+  void _resetZoom() {
     setState(() {
-      _transController.value = Matrix4.identity()
-        ..translate(tx, ty)
-        ..scale(targetScale);
+      _transController.value = Matrix4.identity();
     });
   }
 
   void _zoomIn() {
     final currentMatrix = _transController.value;
     final currentScale = currentMatrix.getMaxScaleOnAxis();
-    if (currentScale < 2.8) {
+    if (currentScale < 2.5) {
       final newScale = currentScale * 1.25;
       setState(() {
         _transController.value = Matrix4.identity()
@@ -124,13 +81,15 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
   void _zoomOut() {
     final currentMatrix = _transController.value;
     final currentScale = currentMatrix.getMaxScaleOnAxis();
-    if (currentScale > 0.45) {
+    if (currentScale > 0.85) {
       final newScale = currentScale * 0.80;
       setState(() {
         _transController.value = Matrix4.identity()
           ..translate(currentMatrix.getTranslation().x, currentMatrix.getTranslation().y)
           ..scale(newScale);
       });
+    } else {
+      _resetZoom();
     }
   }
 
@@ -144,51 +103,58 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        _initScaleToFit(constraints);
+        final double availW = constraints.maxWidth - 12;
+        final double availH = constraints.maxHeight - 12;
 
-        final originX = 40.0 - (_minX * _tileW);
-        final originY = 40.0 - (_minY * _tileH);
+        // Giant, screen-filling mobile tile sizing (Hungry Studio style)
+        double optimalW = availW / (_gridW + 0.15);
+        double optimalH = optimalW * 1.34;
+
+        final double maxLayerLift = widget.engine.layout.layers * 4.5;
+        final double totalH = (_gridH * optimalH) + maxLayerLift;
+
+        if (totalH > availH) {
+          optimalH = (availH - maxLayerLift) / (_gridH + 0.15);
+          optimalW = optimalH / 1.34;
+        }
+
+        _tileW = optimalW;
+        _tileH = optimalH;
+
+        final double boardPixelW = _gridW * _tileW;
+        final double boardPixelH = (_gridH * _tileH) + maxLayerLift;
+
+        // Perfectly centered on the mobile display
+        final double originX = (constraints.maxWidth - boardPixelW) / 2 - (_minX * _tileW);
+        final double originY = (constraints.maxHeight - boardPixelH) / 2 - (_minY * _tileH);
 
         return Stack(
           children: [
-            // Interactive Pan & Zoom Area (Buttery Smooth 60-120 FPS)
+            // Interactive Pan & Zoom Area (Fill screen with zero margins)
             ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Container(
+                width: constraints.maxWidth,
+                height: constraints.maxHeight,
                 color: widget.theme.boardBackgroundColor.withOpacity(0.35),
                 child: InteractiveViewer(
                   transformationController: _transController,
-                  minScale: 0.35,
-                  maxScale: 3.0,
-                  boundaryMargin: const EdgeInsets.all(250),
-                  constrained: false,
+                  minScale: 0.8,
+                  maxScale: 2.8,
+                  boundaryMargin: const EdgeInsets.all(40),
+                  constrained: true,
                   child: GestureDetector(
-                    onDoubleTapDown: (details) {
-                      final currentScale = _transController.value.getMaxScaleOnAxis();
-                      if (currentScale > _initialScale * 1.2) {
-                        _resetZoom(Size(constraints.maxWidth, constraints.maxHeight));
-                      } else {
-                        final tapPos = details.localPosition;
-                        setState(() {
-                          _transController.value = Matrix4.identity()
-                            ..translate(
-                              constraints.maxWidth / 2 - tapPos.dx * 1.6,
-                              constraints.maxHeight / 2 - tapPos.dy * 1.6,
-                            )
-                            ..scale(1.6);
-                        });
-                      }
-                    },
+                    onDoubleTap: _resetZoom,
                     onTapUp: (details) {
                       _handleTap(details.localPosition, originX, originY, _tileW, _tileH);
                     },
                     child: RepaintBoundary(
                       child: SizedBox(
-                        width: _boardPixelW,
-                        height: _boardPixelH,
+                        width: constraints.maxWidth,
+                        height: constraints.maxHeight,
                         child: CustomPaint(
                           key: _paintKey,
-                          size: Size(_boardPixelW, _boardPixelH),
+                          size: Size(constraints.maxWidth, constraints.maxHeight),
                           painter: _MahjongPainter(
                             engine: widget.engine,
                             theme: widget.theme,
@@ -207,8 +173,8 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
 
             // Floating Zoom Controls (Bottom Right)
             Positioned(
-              right: 12,
-              bottom: 12,
+              right: 8,
+              bottom: 8,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -217,17 +183,17 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
                     tooltip: 'Zoom In',
                     onTap: _zoomIn,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildZoomButton(
                     icon: Icons.remove_rounded,
                     tooltip: 'Zoom Out',
                     onTap: _zoomOut,
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   _buildZoomButton(
                     icon: Icons.filter_center_focus_rounded,
-                    tooltip: 'Fit to Screen',
-                    onTap: () => _resetZoom(Size(constraints.maxWidth, constraints.maxHeight)),
+                    tooltip: 'Fit Screen',
+                    onTap: _resetZoom,
                   ),
                 ],
               ),
