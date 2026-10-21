@@ -40,7 +40,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-    _currentLayout = MahjongLayout.turtle();
+    _currentLayout = MahjongLayout.pagoda();
     _engine = MahjongEngine(layout: _currentLayout);
 
     // Load saved theme

@@ -55,8 +55,9 @@ class MahjongHudWidget extends StatelessWidget {
         SafeArea(
           bottom: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -70,44 +71,52 @@ class MahjongHudWidget extends StatelessWidget {
 
                     // Stage Name & Timer
                     Expanded(
-                      child: Column(
-                        children: [
-                          Text(
-                            stageName,
-                            style: TextStyle(
-                              color: theme.primaryTextColor,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 0.5,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              stageName,
+                              style: TextStyle(
+                                color: theme.primaryTextColor,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.5,
+                              ),
+                              textAlign: TextAlign.center,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 2),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                mode.hasTimer ? Icons.timer_outlined : Icons.all_inclusive,
-                                size: 14,
-                                color: theme.secondaryTextColor,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                mode.hasTimer ? _formatTime(elapsedSeconds) : 'ZEN UNTIMED',
-                                style: TextStyle(
+                            const SizedBox(height: 2),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  mode.hasTimer ? Icons.timer_outlined : Icons.all_inclusive,
+                                  size: 14,
                                   color: theme.secondaryTextColor,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
                                 ),
-                              ),
-                            ],
-                          ),
-                        ],
+                                const SizedBox(width: 4),
+                                Text(
+                                  mode.hasTimer ? _formatTime(elapsedSeconds) : 'ZEN UNTIMED',
+                                  style: TextStyle(
+                                    color: theme.secondaryTextColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
 
                     // Settings & Themes
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         _buildIconButton(
                           icon: Icons.palette_outlined,
@@ -128,27 +137,30 @@ class MahjongHudWidget extends StatelessWidget {
                 const SizedBox(height: 8),
 
                 // Stat Badges (Score & Remaining Pairs & Available Moves)
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildStatPill(
-                      label: 'SCORE',
-                      value: '$score',
-                      color: theme.secondaryTextColor,
-                    ),
-                    const SizedBox(width: 8),
-                    _buildStatPill(
-                      label: 'PAIRS',
-                      value: '$remainingPairs',
-                      color: const Color(0xFF64B5F6),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildStatPill(
-                      label: 'MOVES',
-                      value: '$availableMoves',
-                      color: availableMoves > 0 ? const Color(0xFF81C784) : const Color(0xFFE57373),
-                    ),
-                  ],
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      _buildStatPill(
+                        label: 'SCORE',
+                        value: '$score',
+                        color: theme.secondaryTextColor,
+                      ),
+                      const SizedBox(width: 8),
+                      _buildStatPill(
+                        label: 'PAIRS',
+                        value: '$remainingPairs',
+                        color: const Color(0xFF64B5F6),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildStatPill(
+                        label: 'MOVES',
+                        value: '$availableMoves',
+                        color: availableMoves > 0 ? const Color(0xFF81C784) : const Color(0xFFE57373),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -159,32 +171,37 @@ class MahjongHudWidget extends StatelessWidget {
         SafeArea(
           top: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _buildBoosterButton(
-                  icon: Icons.lightbulb_rounded,
-                  label: 'Hint',
-                  count: hintCount,
-                  accentColor: const Color(0xFFFFB300),
-                  onPressed: onHint,
-                ),
-                _buildBoosterButton(
-                  icon: Icons.shuffle_rounded,
-                  label: 'Shuffle',
-                  count: shuffleCount,
-                  accentColor: const Color(0xFF42A5F5),
-                  onPressed: onShuffle,
-                ),
-                _buildBoosterButton(
-                  icon: Icons.undo_rounded,
-                  label: 'Undo',
-                  count: undoCount,
-                  accentColor: const Color(0xFFAB47BC),
-                  onPressed: onUndo,
-                ),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 8.0),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildBoosterButton(
+                    icon: Icons.lightbulb_rounded,
+                    label: 'Hint',
+                    count: hintCount,
+                    accentColor: const Color(0xFFFFD54F),
+                    onPressed: onHint,
+                  ),
+                  const SizedBox(width: 14),
+                  _buildBoosterButton(
+                    icon: Icons.shuffle_rounded,
+                    label: 'Shuffle',
+                    count: shuffleCount,
+                    accentColor: const Color(0xFF26A69A),
+                    onPressed: onShuffle,
+                  ),
+                  const SizedBox(width: 14),
+                  _buildBoosterButton(
+                    icon: Icons.undo_rounded,
+                    label: 'Undo',
+                    count: undoCount,
+                    accentColor: const Color(0xFFAB47BC),
+                    onPressed: onUndo,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -275,7 +292,7 @@ class MahjongHudWidget extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           Container(
-            width: 84,
+            width: 86,
             padding: const EdgeInsets.symmetric(vertical: 8),
             decoration: BoxDecoration(
               color: isEnabled
