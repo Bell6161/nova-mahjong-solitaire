@@ -6,13 +6,31 @@ class FloatingScoreParticle {
   final String text;
   final Color color;
   final double startTime;
+  final TextPainter painter;
 
   FloatingScoreParticle({
     required this.position,
     required this.text,
     required this.color,
     required this.startTime,
-  });
+  }) : painter = TextPainter(
+         text: TextSpan(
+           text: text,
+           style: TextStyle(
+             color: color,
+             fontSize: 22,
+             fontWeight: FontWeight.w900,
+             shadows: const [
+               Shadow(
+                 color: Colors.black54,
+                 blurRadius: 4,
+                 offset: Offset(1, 1),
+               ),
+             ],
+           ),
+         ),
+         textDirection: TextDirection.ltr,
+       )..layout();
 }
 
 class ZenSparkleParticle {
@@ -52,6 +70,20 @@ class ZenVfxController extends ChangeNotifier {
   final List<ZenSparkleParticle> _sparkles = [];
   String? _comboText;
   DateTime? _comboExpiry;
+
+  bool get hasActiveVfx =>
+      _scores.isNotEmpty ||
+      _sparkles.isNotEmpty ||
+      (_comboExpiry != null && DateTime.now().isBefore(_comboExpiry!));
+
+  void prune(double now) {
+    _scores.removeWhere((p) => (now - p.startTime) > 1.2);
+    _sparkles.removeWhere((p) => (now - p.startTime) > 0.8);
+    if (_comboExpiry != null && DateTime.now().isAfter(_comboExpiry!)) {
+      _comboText = null;
+      _comboExpiry = null;
+    }
+  }
 
   void spawnMatchVfx({
     required Offset pos1,
@@ -102,6 +134,7 @@ class ZenVfxController extends ChangeNotifier {
     _scores.clear();
     _sparkles.clear();
     _comboText = null;
+    _comboExpiry = null;
     notifyListeners();
   }
 }
@@ -116,29 +149,40 @@ class _ZenVfxOverlayState extends State<ZenVfxOverlay>
     _anim = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 1),
-    )..repeat();
+    );
+    _anim.addListener(_onTick);
     widget.controller.addListener(_onVfxUpdate);
   }
 
   void _onVfxUpdate() {
+    if (widget.controller.hasActiveVfx) {
+      if (!_anim.isAnimating) {
+        _anim.repeat();
+      }
+    }
     if (mounted) setState(() {});
+  }
+
+  void _onTick() {
+    final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    widget.controller.prune(now);
+    if (!widget.controller.hasActiveVfx) {
+      if (_anim.isAnimating) {
+        _anim.stop();
+      }
+    }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onVfxUpdate);
+    _anim.removeListener(_onTick);
     _anim.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
-
-    // Prune expired particles
-    widget.controller._scores.removeWhere((p) => (now - p.startTime) > 1.2);
-    widget.controller._sparkles.removeWhere((p) => (now - p.startTime) > 0.8);
-
     final showCombo = widget.controller._comboText != null &&
         widget.controller._comboExpiry != null &&
         DateTime.now().isBefore(widget.controller._comboExpiry!);
@@ -146,20 +190,22 @@ class _ZenVfxOverlayState extends State<ZenVfxOverlay>
     return Stack(
       children: [
         widget.child,
-        // Particle canvas
+        // Particle canvas with RepaintBoundary and smart idle-sleeping
         Positioned.fill(
           child: IgnorePointer(
-            child: AnimatedBuilder(
-              animation: _anim,
-              builder: (context, _) {
-                return CustomPaint(
-                  painter: _VfxPainter(
-                    scores: widget.controller._scores,
-                    sparkles: widget.controller._sparkles,
-                    currentTime: DateTime.now().millisecondsSinceEpoch / 1000.0,
-                  ),
-                );
-              },
+            child: RepaintBoundary(
+              child: AnimatedBuilder(
+                animation: _anim,
+                builder: (context, _) {
+                  return CustomPaint(
+                    painter: _VfxPainter(
+                      scores: widget.controller._scores,
+                      sparkles: widget.controller._sparkles,
+                      currentTime: DateTime.now().millisecondsSinceEpoch / 1000.0,
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ),
@@ -217,6 +263,8 @@ class _VfxPainter extends CustomPainter {
   final List<ZenSparkleParticle> sparkles;
   final double currentTime;
 
+  static final Paint _sparklePaint = Paint()..style = PaintingStyle.fill;
+
   _VfxPainter({
     required this.scores,
     required this.sparkles,
@@ -225,7 +273,9 @@ class _VfxPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 1. Draw gentle sparkles
+    if (sparkles.isEmpty && scores.isEmpty) return;
+
+    // 1. Draw gentle sparkles with static Paint singleton
     for (final sp in sparkles) {
       final elapsed = currentTime - sp.startTime;
       if (elapsed < 0 || elapsed > 0.8) continue;
@@ -236,47 +286,26 @@ class _VfxPainter extends CustomPainter {
       final alpha = (1.0 - progress).clamp(0.0, 1.0);
       final radius = sp.maxRadius * (1.0 - progress * 0.5);
 
-      final paint = Paint()
-        ..color = sp.color.withOpacity(alpha * 0.9)
-        ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(dx, dy), radius, paint);
+      _sparklePaint.color = sp.color.withOpacity(alpha * 0.9);
+      canvas.drawCircle(Offset(dx, dy), radius, _sparklePaint);
     }
 
-    // 2. Draw floating scores
+    // 2. Draw floating scores using precomputed TextPainter
     for (final sc in scores) {
       final elapsed = currentTime - sc.startTime;
       if (elapsed < 0 || elapsed > 1.2) continue;
       final progress = elapsed / 1.2;
       final dy = sc.position.dy - (progress * 45.0);
-      final alpha = (1.0 - progress).clamp(0.0, 1.0);
 
-      final textSpan = TextSpan(
-        text: sc.text,
-        style: TextStyle(
-          color: sc.color.withOpacity(alpha),
-          fontSize: 20 + (1.0 - progress) * 4,
-          fontWeight: FontWeight.w900,
-          shadows: [
-            Shadow(
-              color: Colors.black.withOpacity(alpha * 0.6),
-              blurRadius: 4,
-              offset: const Offset(1, 1),
-            ),
-          ],
-        ),
-      );
-      final textPainter = TextPainter(
-        text: textSpan,
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      textPainter.paint(
+      sc.painter.paint(
         canvas,
-        Offset(sc.position.dx - textPainter.width / 2, dy),
+        Offset(sc.position.dx - sc.painter.width / 2, dy),
       );
     }
   }
 
   @override
-  bool shouldRepaint(covariant _VfxPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _VfxPainter oldDelegate) {
+    return scores.isNotEmpty || sparkles.isNotEmpty;
+  }
 }

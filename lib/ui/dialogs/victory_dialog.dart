@@ -50,9 +50,10 @@ class VictoryDialog extends StatelessWidget {
             ),
           ],
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             // Victory Crown
             const Icon(Icons.stars_rounded, color: Color(0xFFFFD700), size: 58),
             const SizedBox(height: 8),
@@ -209,6 +210,7 @@ class VictoryDialog extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

@@ -29,6 +29,13 @@ class MahjongEngine {
   DateTime? lastMatchTime;
   static const Duration comboWindow = Duration(seconds: 4);
 
+  // Performance caches for low-end devices (<60 FPS phones)
+  List<MahjongTile> _sortedTiles = [];
+  List<MahjongTile> get sortedTiles => _sortedTiles;
+  final Set<String> _cachedFreeTileIds = {};
+  final List<MahjongTile> _cachedFreeTiles = [];
+  int _cachedAvailableMoves = 0;
+
   MahjongEngine({required this.layout}) {
     startNewGame();
   }
@@ -42,21 +49,49 @@ class MahjongEngine {
     score = 0;
     combo = 0;
     lastMatchTime = null;
+    _updateSortedTiles();
+    _recomputeCache();
   }
 
-  /// Check if a tile is free according to Mahjong Solitaire rules:
-  /// 1. No tile directly above it (z + 1) overlapping its bounds.
-  /// 2. Left side OR Right side is unobstructed by any tile on the same layer.
-  bool isTileFree(MahjongTile target) {
+  void _updateSortedTiles() {
+    _sortedTiles = List<MahjongTile>.from(tiles)
+      ..sort((a, b) {
+        if (a.z != b.z) return a.z.compareTo(b.z);
+        if (a.y != b.y) return a.y.compareTo(b.y);
+        return a.x.compareTo(b.x);
+      });
+  }
+
+  void _recomputeCache() {
+    _cachedFreeTileIds.clear();
+    _cachedFreeTiles.clear();
+    final Map<String, int> counts = {};
+
+    for (final t in tiles) {
+      if (!t.isRemoved && _computeIsTileFree(t)) {
+        _cachedFreeTileIds.add(t.id);
+        _cachedFreeTiles.add(t);
+        counts[t.matchGroup] = (counts[t.matchGroup] ?? 0) + 1;
+      }
+    }
+
+    int moves = 0;
+    for (final c in counts.values) {
+      moves += c ~/ 2;
+    }
+    _cachedAvailableMoves = moves;
+  }
+
+  /// Internal checker for Mahjong Solitaire free tile status
+  bool _computeIsTileFree(MahjongTile target) {
     if (target.isRemoved) return false;
 
     // 1. Check top blockers (layer > target.z)
     for (final other in tiles) {
       if (other.isRemoved || other.id == target.id) continue;
       if (other.z > target.z) {
-        // Tile overlaps if horizontal and vertical distances are both < 0.95
         if ((other.x - target.x).abs() < 0.95 && (other.y - target.y).abs() < 0.95) {
-          return false; // Blocked from above!
+          return false;
         }
       }
     }
@@ -70,12 +105,10 @@ class MahjongEngine {
       if (other.z == target.z) {
         final double dy = (other.y - target.y).abs();
         if (dy < 0.90) {
-          // Check left neighbor: x is to the left by ~1.0
           final double dxLeft = target.x - other.x;
           if (dxLeft > 0.1 && dxLeft < 1.05) {
             hasLeftNeighbor = true;
           }
-          // Check right neighbor: x is to the right by ~1.0
           final double dxRight = other.x - target.x;
           if (dxRight > 0.1 && dxRight < 1.05) {
             hasRightNeighbor = true;
@@ -84,13 +117,19 @@ class MahjongEngine {
       }
     }
 
-    // Free if at least one side is open
     return (!hasLeftNeighbor) || (!hasRightNeighbor);
   }
 
-  /// Returns all currently free, playable tiles
+  /// Check if a tile is free according to Mahjong Solitaire rules:
+  /// O(1) instantaneous lookup from cache!
+  bool isTileFree(MahjongTile target) {
+    if (target.isRemoved) return false;
+    return _cachedFreeTileIds.contains(target.id);
+  }
+
+  /// Returns all currently free, playable tiles (O(1) read)
   List<MahjongTile> getFreeTiles() {
-    return tiles.where((t) => !t.isRemoved && isTileFree(t)).toList();
+    return List.unmodifiable(_cachedFreeTiles);
   }
 
   /// Select a tile or match it with currently selected tile
@@ -146,6 +185,9 @@ class MahjongEngine {
       );
       undoStack.add(action);
 
+      // Recompute free tiles and available moves cache
+      _recomputeCache();
+
       if (onMatch != null) {
         onMatch(action);
       }
@@ -177,19 +219,8 @@ class MahjongEngine {
     return null;
   }
 
-  /// Total count of currently available free matching pairs
-  int get availableMovesCount {
-    final free = getFreeTiles();
-    final Map<String, int> counts = {};
-    for (final t in free) {
-      counts[t.matchGroup] = (counts[t.matchGroup] ?? 0) + 1;
-    }
-    int moves = 0;
-    for (final c in counts.values) {
-      moves += c ~/ 2;
-    }
-    return moves;
-  }
+  /// Total count of currently available free matching pairs (O(1) read from cache)
+  int get availableMovesCount => _cachedAvailableMoves;
 
   /// Undo the last match
   bool undoLastMove() {
@@ -207,6 +238,8 @@ class MahjongEngine {
     selectedTile?.isSelected = false;
     selectedTile = null;
     activeHint = null;
+
+    _recomputeCache();
     return true;
   }
 
@@ -238,12 +271,17 @@ class MahjongEngine {
         }
       }
 
+      _updateSortedTiles();
+      _recomputeCache();
+
       // Check if there is at least one legal free pair
       if (getHint() != null) {
         activeHint = null;
         return true;
       }
     }
+    _updateSortedTiles();
+    _recomputeCache();
     return true;
   }
 

@@ -283,15 +283,8 @@ class _MahjongBoardWidgetState extends State<MahjongBoardWidget> {
     double tileW,
     double tileH,
   ) {
-    // Top-most layer first (Z descending, then foreground Y descending)
-    final sortedTiles = List<MahjongTile>.from(widget.engine.tiles)
-      ..sort((a, b) {
-        if (a.z != b.z) return b.z.compareTo(a.z);
-        if (a.y != b.y) return b.y.compareTo(a.y);
-        return b.x.compareTo(a.x);
-      });
-
-    for (final tile in sortedTiles) {
+    // Top-most layer first: widget.engine.sortedTiles.reversed is already Z descending, Y descending
+    for (final tile in widget.engine.sortedTiles.reversed) {
       if (tile.isRemoved) continue;
 
       final double zOffset = tile.z * 3.5;
@@ -321,6 +314,44 @@ class _MahjongPainter extends CustomPainter {
   final double tileW;
   final double tileH;
 
+  // Static preallocated Paint singletons to guarantee 0 GC pressure on budget devices
+  static final Paint _shadowPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _spritePaint = Paint()..filterQuality = FilterQuality.medium;
+  static final Paint _blockedVeilPaint = Paint()
+    ..color = const Color(0x7A000000)
+    ..style = PaintingStyle.fill;
+  static final Paint _freeRimPaint = Paint()
+    ..color = const Color(0x61FFD54F)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+  static final Paint _selectionBorderPaint = Paint()
+    ..color = const Color(0xFFFFD700)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3.5;
+  static final Paint _selectionSheenPaint = Paint()
+    ..color = const Color(0x33FFD700)
+    ..style = PaintingStyle.fill;
+  static final Paint _hintBorderPaint = Paint()
+    ..color = const Color(0xFFFFC107)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3.5;
+
+  static final List<Color> _cachedShadowColors = List.generate(
+    10,
+    (z) => Colors.black.withOpacity((0.30 + (z * 0.07)).clamp(0.0, 0.85)),
+  );
+
+  static final Paint _procBodyFreePaint = Paint()
+    ..color = const Color(0xFFFBFBF8)
+    ..style = PaintingStyle.fill;
+  static final Paint _procBodyBlockedPaint = Paint()
+    ..color = const Color(0xFFBDBDB8)
+    ..style = PaintingStyle.fill;
+  static final Paint _procBorderPaint = Paint()
+    ..color = const Color(0xFF8D8D8D)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0;
+
   _MahjongPainter({
     required this.engine,
     required this.theme,
@@ -332,19 +363,12 @@ class _MahjongPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Base-to-top sort: lowest layer painted first, highest on top
-    final sortedTiles = List<MahjongTile>.from(engine.tiles)
-      ..sort((a, b) {
-        if (a.z != b.z) return a.z.compareTo(b.z);
-        if (a.y != b.y) return a.y.compareTo(b.y);
-        return a.x.compareTo(b.x);
-      });
-
+    // Engine cached sorted tiles (z ascending, y ascending) - 0 sorting or allocation overhead
     final activeHintSet = engine.activeHint != null
         ? {engine.activeHint![0].id, engine.activeHint![1].id}
-        : <String>{};
+        : const <String>{};
 
-    for (final tile in sortedTiles) {
+    for (final tile in engine.sortedTiles) {
       if (tile.isRemoved) continue;
 
       final bool isFree = engine.isTileFree(tile);
@@ -358,16 +382,15 @@ class _MahjongPainter extends CustomPainter {
       final rect = Rect.fromLTWH(left, top, tileW, tileH);
       final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(6.0));
 
-      // --- 1. Hardware-Accelerated 3D Directional Drop Shadow (0% Gaussian CPU load) ---
+      // --- 1. Hardware-Accelerated 3D Directional Drop Shadow ---
       final double shadowOffset = 2.0 + (tile.z * 3.0) + (isSelected ? 5.0 : 0.0);
       final shadowRect = RRect.fromRectAndRadius(
         rect.shift(Offset(shadowOffset, shadowOffset)),
         const Radius.circular(6.0),
       );
-      canvas.drawRRect(
-        shadowRect,
-        Paint()..color = Colors.black.withOpacity(0.30 + (tile.z * 0.07)),
-      );
+      final int zIndex = tile.z.clamp(0, 9);
+      _shadowPaint.color = _cachedShadowColors[zIndex];
+      canvas.drawRRect(shadowRect, _shadowPaint);
 
       // --- 2. 3D PNG Sprite Texture ---
       final ui.Image? sprite = SpriteManager.getTileImage(
@@ -384,28 +407,15 @@ class _MahjongPainter extends CustomPainter {
           sprite.height.toDouble(),
         );
 
-        final paint = Paint()..filterQuality = FilterQuality.high;
-        canvas.drawImageRect(sprite, src, rect, paint);
+        canvas.drawImageRect(sprite, src, rect, _spritePaint);
 
         // --- VISUAL COMFORT & CONTRAST FILTER ---
         if (!isFree) {
           // Blocked tile: Soft dark-glass translucent veil
-          // Instantly dims locked tiles so the eye easily focuses on playable moves!
-          canvas.drawRRect(
-            rrect,
-            Paint()
-              ..color = Colors.black.withOpacity(0.48)
-              ..style = PaintingStyle.fill,
-          );
+          canvas.drawRRect(rrect, _blockedVeilPaint);
         } else {
           // Free tile: Gentle warm golden rim spark
-          canvas.drawRRect(
-            rrect,
-            Paint()
-              ..color = const Color(0xFFFFD54F).withOpacity(0.38)
-              ..style = PaintingStyle.stroke
-              ..strokeWidth = 1.2,
-          );
+          canvas.drawRRect(rrect, _freeRimPaint);
         }
       } else {
         // Fallback procedural tile
@@ -414,28 +424,13 @@ class _MahjongPainter extends CustomPainter {
 
       // --- 3. Selection Highlight ---
       if (isSelected) {
-        final glowPaint = Paint()
-          ..color = const Color(0xFFFFD700)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3.5;
-        canvas.drawRRect(rrect, glowPaint);
-
-        // Warm internal amber sheen
-        canvas.drawRRect(
-          rrect,
-          Paint()
-            ..color = const Color(0xFFFFD700).withOpacity(0.20)
-            ..style = PaintingStyle.fill,
-        );
+        canvas.drawRRect(rrect, _selectionBorderPaint);
+        canvas.drawRRect(rrect, _selectionSheenPaint);
       }
 
       // --- 4. Hint Highlight ---
       if (isHinted) {
-        final hintPaint = Paint()
-          ..color = const Color(0xFFFFC107)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3.5;
-        canvas.drawRRect(rrect, hintPaint);
+        canvas.drawRRect(rrect, _hintBorderPaint);
       }
     }
   }
@@ -446,16 +441,8 @@ class _MahjongPainter extends CustomPainter {
     MahjongTile tile,
     bool isFree,
   ) {
-    final bodyPaint = Paint()
-      ..color = isFree ? const Color(0xFFFBFBF8) : const Color(0xFFBDBDB8)
-      ..style = PaintingStyle.fill;
-    canvas.drawRRect(rrect, bodyPaint);
-
-    final borderPaint = Paint()
-      ..color = const Color(0xFF8D8D8D)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawRRect(rrect, borderPaint);
+    canvas.drawRRect(rrect, isFree ? _procBodyFreePaint : _procBodyBlockedPaint);
+    canvas.drawRRect(rrect, _procBorderPaint);
 
     final textSpan = TextSpan(
       text: '${tile.category[0].toUpperCase()}${tile.value}',
@@ -502,7 +489,6 @@ class _MahjongPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _MahjongPainter oldDelegate) {
-    // Only repaint when board state, selection, or hint changes!
     return true;
   }
 }
